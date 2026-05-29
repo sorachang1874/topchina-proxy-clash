@@ -1,0 +1,50 @@
+name: Update Clash config
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-clash
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate Clash config
+        run: python scripts/convert_topchina_proxy_list.py --output dist/clash.yaml
+
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+      - name: Validate generated config
+        run: |
+          test -s dist/clash.yaml
+          grep -q '^proxies:' dist/clash.yaml
+          grep -q '"TopChina Auto"' dist/clash.yaml
+          grep -q '"MATCH,TopChina Select"' dist/clash.yaml
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- dist/clash.yaml; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git add dist/clash.yaml
+          git commit -m "chore: update Clash proxy list"
+          git push
